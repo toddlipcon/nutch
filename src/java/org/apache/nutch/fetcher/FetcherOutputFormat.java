@@ -72,13 +72,13 @@ public class FetcherOutputFormat implements OutputFormat<Text, NutchWritable> {
         private RecordWriter<Text, Parse> parseOut;
 
         {
-          if (Fetcher.isStoringContent(job)) {
+          if (FetcherConf.isStoringContent(job)) {
             contentOut = new MapFile.Writer(job, fs, content.toString(),
                                             Text.class, Content.class,
                                             compType, progress);
           }
 
-          if (Fetcher.isParsing(job)) {
+          if (FetcherConf.isParsing(job)) {
             parseOut = new ParseOutputFormat().getRecordWriter(fs, job, name, progress);
           }
         }

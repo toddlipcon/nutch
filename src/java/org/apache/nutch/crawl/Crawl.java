@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.apache.nutch.fetcher.Fetcher;
+import org.apache.nutch.fetcher.FetcherConf;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.conf.*;
 import org.apache.hadoop.mapred.*;
@@ -98,6 +99,8 @@ public class Crawl {
     Path indexes = new Path(dir + "/indexes");
     Path index = new Path(dir + "/index");
 
+    FetcherConf.setParsing(conf, true);
+
     Path tmpDir = job.getLocalPath("crawl"+Path.SEPARATOR+getDate());
     Injector injector = new Injector(conf);
     Generator generator = new Generator(conf);
@@ -120,9 +123,6 @@ public class Crawl {
         break;
       }
       fetcher.fetch(segment, threads);  // fetch it
-      if (!Fetcher.isParsing(job)) {
-        parseSegment.parse(segment);    // parse it, if needed
-      }
       crawlDbTool.update(crawlDb, new Path[]{segment}, true, true); // update crawldb
     }
     if (i > 0) {
