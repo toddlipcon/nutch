@@ -73,7 +73,9 @@ public class Fetcher extends Configured {
     }
   }
 
-
+  /**
+   * A Runnable that fetches a single FetchItem.
+   */
   private static class FetchRunnable implements Runnable {
     private final FetchItem fit;
     private final FetchMapper _mapper;
@@ -282,7 +284,10 @@ public class Fetcher extends Configured {
 
   }
 
-
+  /**
+   * The Mapper that runs over a single part file inside a segment, fetching
+   * each of the CrawlDatums and outputting CrawlDatums for the fetched responses.
+   */
   private static class FetchMapper extends Configured
     implements MapRunnable<Text, CrawlDatum, Text, NutchWritable>
   {
@@ -337,6 +342,9 @@ public class Fetcher extends Configured {
       _queuePartitioner = createQueuePartitioner(conf);
     }
 
+    /**
+     * Create a QueuePartitioner based on the configured queueing policy.
+     */
     private QueuePartitioner createQueuePartitioner(JobConf conf) {
       boolean byIP = conf.getBoolean("fetcher.threads.per.host.by.ip", false);
 
@@ -346,18 +354,28 @@ public class Fetcher extends Configured {
         return new ByHostnameQueuePartitioner();
     }
 
-
-    String filterAndNormalize(String url) 
+    /**
+     * Filter and normalize the given url.
+     *
+     * @return the normalized URL, or null if it should be filtered.
+     */
+    private String filterAndNormalize(String url) 
       throws MalformedURLException, URLFilterException
     {
       String newUrl = _normalizers.normalize(url, URLNormalizers.SCOPE_FETCHER);
       return _urlFilters.filter(newUrl);
     }
 
+    /**
+     * Start the ExecutorService on which the actual fetch jobs will run.
+     */
     private ExecutorService startExecutor() {
       return Executors.newFixedThreadPool(_threadCount);
     }
 
+    /**
+     * Submit a FetchItem to its appropriate queue.
+     */
     void submitFetchItem(FetchItem fi) {
       String qid = _queuePartitioner.getQueueId(fi);
       if (qid == null)
@@ -367,6 +385,11 @@ public class Fetcher extends Configured {
                          new FetchRunnable(fi, this));
     }
 
+    /**
+     * Set the crawl delay for the queue that manages the given FetchItem.
+     *
+     * @param delay the crawl delay in milliseconds
+     */
     void setCrawlDelay(FetchItem fi, long delay) {
       String qid = _queuePartitioner.getQueueId(fi);
       if (qid == null)
@@ -375,6 +398,9 @@ public class Fetcher extends Configured {
       _fetchQueue.getQueue(qid).setCrawlDelay(delay);
     }
 
+    /**
+     * Entry point for Mapper
+     */
     public void run(RecordReader<Text, CrawlDatum> input,
                     OutputCollector<Text, NutchWritable> output,
                     Reporter reporter) throws IOException {
@@ -382,13 +408,15 @@ public class Fetcher extends Configured {
       Text key = new Text();
       CrawlDatum val = new CrawlDatum();
 
-
       _output = output;
 
       while (input.next(key, val)) {        
         FetchItem fi = new FetchItem(key, val);
         submitFetchItem(fi);
-        if (_fetchQueue.countFullQueues(2) < _threadCount) {
+
+        // while there are more than _threadCount queues that have at least 2
+        // items queued up, sleep for a little bit.
+        while (_fetchQueue.countFullQueues(2) > _threadCount) {
           reporter.incrCounter(Counters.QUEUES_FULL_WAIT, 1);
           try {
             Thread.sleep(500);
@@ -398,6 +426,10 @@ public class Fetcher extends Configured {
       }
     }
 
+    /**
+     * The Mapper has run through all of its input. We need to wait for all the
+     * queues to empty out.
+     */
     public void close() {
       // TODO log/status
       _fetchQueue.shutdown();
@@ -409,9 +441,14 @@ public class Fetcher extends Configured {
       if (LOG.isInfoEnabled()) {
         LOG.info("fetch of " + url + " failed with: " + message);
       }
+      // TODO: add back error counter
       //      _errors.incrementAndGet();
     }
 
+    /**
+     * Output the fetched content for this CrawlDatum. If we have content fetched,
+     * and we are running in parsing mode, the content parsed and the parse status is returned.
+     */
     private ParseStatus output(Text key, CrawlDatum datum,
                                Content content, ProtocolStatus pstatus, int status) {
 
@@ -516,6 +553,7 @@ public class Fetcher extends Configured {
     }
 
     private void updateStatus(int bytesInPage) throws IOException {
+      // TODO: add back in status
       //pages.incrementAndGet();
       //bytes.addAndGet(bytesInPage);
     } 
@@ -548,7 +586,6 @@ public class Fetcher extends Configured {
 
     abstract String getQueueIdForUrl(URL url);
   }
-
 
 
   /**
@@ -586,6 +623,9 @@ public class Fetcher extends Configured {
     }
   }
 
+  /**
+   * Fetch the given segment using the given number of threads.
+   */
   public void fetch(Path segment, int threads)
     throws IOException {
 
@@ -594,6 +634,9 @@ public class Fetcher extends Configured {
     fetch(segment);
   }
 
+  /**
+   * Fetch the given segment using the configured number of threads from our Configuration.
+   */
   public void fetch(Path segment)
     throws IOException {
 
