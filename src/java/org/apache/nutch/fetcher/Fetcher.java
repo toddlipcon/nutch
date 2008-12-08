@@ -57,22 +57,6 @@ public class Fetcher extends Configured {
   public static final String PROTOCOL_REDIR = "protocol";
 
 
-  public static class InputFormat extends SequenceFileInputFormat<Text, CrawlDatum> {
-    /** Don't split inputs, to keep things polite. */
-    public InputSplit[] getSplits(JobConf job, int nSplits)
-      throws IOException {
-      FileStatus[] files = listStatus(job);
-      FileSplit[] splits = new FileSplit[files.length];
-      FileSystem fs = FileSystem.get(job);
-      for (int i = 0; i < files.length; i++) {
-        FileStatus cur = files[i];
-        splits[i] = new FileSplit(cur.getPath(), 0,
-            cur.getLen(), (String[])null);
-      }
-      return splits;
-    }
-  }
-
   /**
    * A Runnable that fetches a single FetchItem.
    */
@@ -653,7 +637,7 @@ public class Fetcher extends Configured {
     job.setSpeculativeExecution(false);
 
     FileInputFormat.addInputPath(job, new Path(segment, CrawlDatum.GENERATE_DIR_NAME));
-    job.setInputFormat(InputFormat.class);
+    job.setInputFormat(UnsplitableSFInputFormat.class);
 
     job.setMapRunnerClass(FetchMapper.class);
 
