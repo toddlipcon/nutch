@@ -89,4 +89,11 @@ class FetchItem {
   public URL getJavaUrl() {
     return javaUrl;
   }
+
+  public String toString() {
+    return "FetchItem{\n" +
+      "url = " + String.valueOf(url) + "\n" +
+      "crawlDatum = " + String.valueOf(datum)
+      + "}";
+  }
 }

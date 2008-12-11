@@ -19,8 +19,11 @@ package org.apache.nutch.crawl;
 import java.io.File;
 import java.io.IOException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -31,9 +34,13 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.MapFile;
 import org.apache.hadoop.io.Text;
 import org.mortbay.http.HttpContext;
+import org.mortbay.http.HttpResponse;
+import org.mortbay.http.HttpRequest;
 import org.mortbay.http.SocketListener;
+import org.mortbay.http.handler.AbstractHttpHandler;
 import org.mortbay.http.handler.ResourceHandler;
 import org.mortbay.jetty.Server;
+import org.mortbay.util.ByteArrayISO8859Writer;
 
 public class CrawlDBTestUtil {
 
@@ -141,5 +148,57 @@ public class CrawlDBTestUtil {
     staticContext.addHandler(new ResourceHandler());
     webServer.addContext(staticContext);
     return webServer;
+  }
+
+  public static class RecordingHandler extends AbstractHttpHandler {
+    public static class LogEntry {
+      public LogEntry(long ts, String req) {
+        tsMillis = ts;
+        reqPath = req;
+      }
+      public long tsMillis;
+      public String reqPath;
+    }
+
+    List<LogEntry> _entries = new ArrayList<LogEntry>();
+
+    public RecordingHandler() {
+    }
+
+    public void handle(String path, String params, HttpRequest req, HttpResponse res) throws IOException {
+      System.err.println("HANDLER: " + path);
+      _entries.add(new LogEntry(System.currentTimeMillis(), path));
+    }
+
+    public List<LogEntry> getEntries() {
+      return _entries;
+    }
+  }
+
+  public static class StringServingHandler extends AbstractHttpHandler {
+    private Map<String, String> _pathToResponse;
+
+    public StringServingHandler(Map<String, String> pathToResponse) {
+      _pathToResponse = pathToResponse;
+    }
+
+    public void handle(String path, String params, HttpRequest req, HttpResponse res) throws IOException {
+      if (_pathToResponse.containsKey(path)) {
+        System.err.println("Handling string req for " + path);
+
+        res.setStatus(200);
+        res.setContentType("text/plain");
+
+        ByteArrayISO8859Writer writer= new ByteArrayISO8859Writer(2048);
+        writer.write(_pathToResponse.get(path));
+
+        writer.flush();
+        res.setContentLength(writer.size());
+        writer.writeTo(res.getOutputStream());
+        writer.destroy();
+        res.commit();
+        req.setHandled(true);
+      }
+    }
   }
 }

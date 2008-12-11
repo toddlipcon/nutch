@@ -78,11 +78,11 @@ public class Fetcher extends Configured {
       Protocol protocol = _mapper._protocolFactory.getProtocol(fit.url.toString());
       RobotRules rules = protocol.getRobotRules(fit.url, fit.datum);
 
+      LOG.info("Robot rules: " + String.valueOf(rules));
+
       // Check that we aren't denied by robot rules
       if (!rules.isAllowed(fit.getJavaUrl())) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Denied by robots.txt: " + fit.url);
-        }
+        LOG.debug("Denied by robots.txt: " + fit.url);
         _mapper.output(fit.url, fit.datum, null, ProtocolStatus.STATUS_ROBOTS_DENIED, CrawlDatum.STATUS_FETCH_GONE);
         return null;
       }
@@ -172,14 +172,16 @@ public class Fetcher extends Configured {
 
     public void run() {
       try {
-        if (LOG.isInfoEnabled()) { LOG.info("fetching " + fit.url); }
-
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("redirectCount=" + fit.getRedirectDepth());
-        }
+        LOG.info("fetching " + fit.url);
+        LOG.debug("redirectCount=" + fit.getRedirectDepth());
 
         // Actually fetch the item
         ProtocolOutput output = fetchProtocolOutput();
+
+        // No output is possible if the host is down, denied by robots, etc
+        if (output == null)
+          return;
+
         ProtocolStatus status = output.getStatus();
         Content content = output.getContent();
 
@@ -245,7 +247,7 @@ public class Fetcher extends Configured {
             _mapper.output(fit.url, fit.datum, null, status, CrawlDatum.STATUS_FETCH_RETRY);
         }
       } catch (Throwable t) {
-        _mapper.logError(fit.url, t.toString());
+        _mapper.logError(fit.url, StringUtils.stringifyException(t));
         _mapper.output(fit.url, fit.datum, null, ProtocolStatus.STATUS_FAILED, CrawlDatum.STATUS_FETCH_RETRY);
       }
     }
@@ -395,7 +397,9 @@ public class Fetcher extends Configured {
       _output = output;
 
       while (input.next(key, val)) {        
-        FetchItem fi = new FetchItem(key, val);
+        // The cloning below is very important - otherwise it will be modified
+        // underneath the FetchItem.
+        FetchItem fi = new FetchItem(new Text(key), (CrawlDatum)val.clone());
         submitFetchItem(fi);
 
         // while there are more than _threadCount queues that have at least 2
@@ -408,6 +412,8 @@ public class Fetcher extends Configured {
           }          
         }
       }
+
+      close();
     }
 
     /**
@@ -416,8 +422,11 @@ public class Fetcher extends Configured {
      */
     public void close() {
       // TODO log/status
+      LOG.info("Fetcher shutting down fetch queue");
       _fetchQueue.shutdown();
+      LOG.info("Fetcher awaiting fetch queue completion");
       _fetchQueue.awaitCompletion();
+      LOG.info("Fetcher shutting down executor completion");
       _executor.shutdown();
     }
 
@@ -478,6 +487,7 @@ public class Fetcher extends Configured {
       }
 
       try {
+        
         _output.collect(key, new NutchWritable(datum));
         if (content != null && _isStoringContent)
           _output.collect(key, new NutchWritable(content));

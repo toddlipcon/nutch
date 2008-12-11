@@ -18,6 +18,9 @@ package org.apache.nutch.fetcher;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
 import java.util.Collections;
 
 import org.apache.hadoop.conf.Configuration;
@@ -33,6 +36,7 @@ import org.apache.nutch.metadata.Nutch;
 import org.apache.nutch.parse.ParseData;
 import org.apache.nutch.protocol.Content;
 import org.mortbay.jetty.Server;
+import org.mortbay.http.HttpContext;
 
 import junit.framework.TestCase;
 
@@ -63,18 +67,16 @@ public class TestFetcher extends TestCase {
     urlPath=new Path(testdir,"urls");
     crawldbPath=new Path(testdir,"crawldb");
     segmentsPath=new Path(testdir,"segments");
+
     server=CrawlDBTestUtil.getServer(conf.getInt("content.server.port",50000), "build/test/data/fetch-test-site");
-    server.start();
   }
 
   protected void tearDown() throws InterruptedException, IOException{
     server.stop();
     fs.delete(testdir, true);
   }
-  
-  public void testFetch() throws IOException {
-    
-    //generate seedlist
+
+  private List<String> getSeedList() {
     ArrayList<String> urls=new ArrayList<String>();
     
     addUrl(urls,"index.html");
@@ -83,7 +85,11 @@ public class TestFetcher extends TestCase {
     addUrl(urls,"dup_of_pagea.html");
     addUrl(urls,"nested_spider_trap.html");
     addUrl(urls,"exception.html");
-    
+    return urls;
+  }
+
+  private Path generateSegment(List<String> urls) throws IOException {
+    //generate seedlist
     CrawlDBTestUtil.generateSeedList(fs, urlPath, urls);
     
     //inject
@@ -94,14 +100,77 @@ public class TestFetcher extends TestCase {
     Generator g=new Generator(conf);
     Path generatedSegment = g.generate(crawldbPath, segmentsPath, 1,
         Long.MAX_VALUE, Long.MAX_VALUE, false, false);
+    return generatedSegment;
+  }
+
+  private long timeFetch(Path segment) throws IOException {
+    // Clean up previous fetch results so we can use the same inject and generate
+    // twice.
+    fs.delete(new Path(segment, "crawl_parse"));
+    fs.delete(new Path(segment, "crawl_fetch"));
+    fs.delete(new Path(segment, "parse_data"));
+    fs.delete(new Path(segment, "parse_text"));
 
     long time=System.currentTimeMillis();
-    //fetch
-    conf.setBoolean("fetcher.parse", true);
     Fetcher fetcher=new Fetcher(conf);
-    fetcher.fetch(generatedSegment, 1);
+    fetcher.fetch(segment, 1);
+    return System.currentTimeMillis()-time;
+  }
 
-    time=System.currentTimeMillis()-time;
+  private List<CrawlDBTestUtil.RecordingHandler.LogEntry> crawlWithRobots(
+    Path segment,String robotsTxt)
+    throws Exception
+  {
+    // Set up the server so that it logs requests
+    HttpContext context = server.getContext("/");
+    CrawlDBTestUtil.RecordingHandler recorder = new CrawlDBTestUtil.RecordingHandler();
+    context.addHandler(0, recorder);
+
+
+    // Add a robots file which disallows us
+    HashMap<String, String> robotMap = new HashMap<String, String>();
+    robotMap.put("/robots.txt", "User-agent: *\nDisallow: /");
+    context.addHandler(1, new CrawlDBTestUtil.StringServingHandler(robotMap));
+
+    // Start up the server
+    server.start();
+
+    // Do the fetch
+    long time = timeFetch(segment);
+
+    server.stop();
+    return recorder.getEntries();
+  }
+
+  public void testRobots() throws Exception {
+
+    // We don't care about parsing output
+    conf.setBoolean("fetcher.parse", false);
+
+    List<String> urls = getSeedList();
+    Path generatedSegment = generateSegment(urls);
+
+    // See what got fetched
+    List<CrawlDBTestUtil.RecordingHandler.LogEntry> entries = crawlWithRobots(
+      generatedSegment, "User-agent: *\nDisallow: /");
+    assertTrue(entries.size() > 0);
+
+    // Make sure robots.txt got fetched
+    assertEquals(entries.get(0).reqPath, "/robots.txt");
+
+    // Make sure nothing else got fetched since we disallowed all user agents
+    assertEquals(1, entries.size());
+  }
+  
+  public void testFetch() throws Exception {
+    server.start();
+    
+    List<String> urls = getSeedList();
+    Path generatedSegment = generateSegment(urls);
+
+    conf.setBoolean("fetcher.parse", true);
+
+    long time = timeFetch(generatedSegment);
     
     //verify politeness, time taken should be more than (num_of_pages +1)*delay
     int minimumTime=(int) ((urls.size()+1)*1000*conf.getFloat("fetcher.server.delay",5));
