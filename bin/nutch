@@ -53,6 +53,8 @@ if [ $# = 0 ]; then
   echo "  dedup             remove duplicates from a set of segment indexes"
   echo "  plugin            load a plugin and run one of its classes main()"
   echo "  server            run a search server"
+  echo
+  echo "  junit             run the given unit test"
   echo " or"
   echo "  CLASSNAME         run the class named CLASSNAME"
   echo "Most commands print help when invoked w/o parameters."
@@ -238,6 +240,9 @@ elif [ "$COMMAND" = "plugin" ] ; then
   CLASS=org.apache.nutch.plugin.PluginRepository
 elif [ "$COMMAND" = "server" ] ; then
   CLASS='org.apache.nutch.searcher.DistributedSearch$Server'
+elif [ "$COMMAND" = "junit" ] ; then
+  CLASSPATH=$CLASSPATH:src/test/
+  CLASS='junit.textui.TestRunner'
 else
   CLASS=$COMMAND
 fi
