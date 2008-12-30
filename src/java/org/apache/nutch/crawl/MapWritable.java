@@ -124,18 +124,19 @@ public class MapWritable extends AbstractMapWritable
   /** {@inheritDoc} */
   @Override
   public void write(DataOutput out) throws IOException {
-    super.write(out);
-    
     // Write out the number of entries in the map
     
     out.writeInt(instance.size());
 
+    super.write(out);
+    
     // Then write out each key/value pair
     
     for (Map.Entry<Writable, Writable> e: instance.entrySet()) {
+      // NUTCH-676 changed order
       out.writeByte(getId(e.getKey().getClass()));
-      e.getKey().write(out);
       out.writeByte(getId(e.getValue().getClass()));
+      e.getKey().write(out);
       e.getValue().write(out);
     }
   }
@@ -144,15 +145,16 @@ public class MapWritable extends AbstractMapWritable
   @SuppressWarnings("unchecked")
   @Override
   public void readFields(DataInput in) throws IOException {
+    // Read the number of entries in the map    
+    int entries = in.readInt();
+    // NUTCH-676 - this is changed order from hadoop
+
     super.readFields(in);
     
     // First clear the map.  Otherwise we will just accumulate
     // entries every time this method is called.
     this.instance.clear();
     
-    // Read the number of entries in the map
-    
-    int entries = in.readInt();
     
     // Then read each key/value pair
     
@@ -160,11 +162,12 @@ public class MapWritable extends AbstractMapWritable
       Writable key = (Writable) ReflectionUtils.newInstance(getClass(
           in.readByte()), getConf());
       
-      key.readFields(in);
-      
       Writable value = (Writable) ReflectionUtils.newInstance(getClass(
           in.readByte()), getConf());
+
+      // NUTCH-676 changed order of data around
       
+      key.readFields(in);
       value.readFields(in);
       instance.put(key, value);
     }
