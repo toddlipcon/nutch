@@ -112,10 +112,8 @@ public class Fetcher extends Configured {
 
       // Redirect was filtered or was a self-redirect
       if (newUrl == null || newUrl.equals(origFit.getUrlString())) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug(" - redirect skipped: " +
-                    (newUrl != null ? "to same url" : "filtered"));
-        }
+        LOG.debug(" - redirect skipped: " +
+                  (newUrl != null ? "to same url" : "filtered"));
         return null;
       }
 
@@ -160,9 +158,7 @@ public class Fetcher extends Configured {
         // We have redirecting enabled, so add it to the queue
         _mapper.submitFetchItem(redirFit);
       } else if (_maxRedirects > 0) {
-        if (LOG.isInfoEnabled()) {
-          LOG.info(" - redirect count exceeded " + fit.url);
-        }
+        LOG.info(" - redirect count exceeded " + fit.url);
         _mapper.output(origFit.url, origFit.datum, null,
                ProtocolStatus.STATUS_REDIR_EXCEEDED, CrawlDatum.STATUS_FETCH_GONE);
       }
@@ -241,9 +237,7 @@ public class Fetcher extends Configured {
             break;
 
           default:
-            if (LOG.isWarnEnabled()) {
-              LOG.warn("Unknown ProtocolStatus: " + status.getCode());
-            }
+            LOG.warn("Unknown ProtocolStatus: " + status.getCode());
             _mapper.output(fit.url, fit.datum, null, status, CrawlDatum.STATUS_FETCH_RETRY);
         }
       } catch (Throwable t) {
@@ -317,7 +311,7 @@ public class Fetcher extends Configured {
       _segmentName = conf.get(Nutch.SEGMENT_NAME_KEY);
       _threadCount = conf.getInt("fetcher.threads.fetch", 10);
 
-      if (LOG.isInfoEnabled()) { LOG.info("Fetcher: threads: " + _threadCount); }
+      LOG.info("Fetcher: threads: " + _threadCount);
 
       _executor = startExecutor();
       _fetchQueue = new FetchQueue(
@@ -431,9 +425,7 @@ public class Fetcher extends Configured {
     }
 
     private void logError(Text url, String message) {
-      if (LOG.isInfoEnabled()) {
-        LOG.info("fetch of " + url + " failed with: " + message);
-      }
+      LOG.info("fetch of " + url + " failed with: " + message);
       // TODO: add back error counter
       //      _errors.incrementAndGet();
     }
@@ -458,10 +450,8 @@ public class Fetcher extends Configured {
         try {
           _scFilters.passScoreBeforeParsing(key, datum, content);
         } catch (Exception e) {
-          if (LOG.isWarnEnabled()) {
-            e.printStackTrace(LogUtil.getWarnStream(LOG));
-            LOG.warn("Couldn't pass score, url " + key + " (" + e + ")");
-          }
+          LOG.warn("Couldn't pass score, url " + key + " (" +
+                   StringUtils.stringifyException(e) + ")");
         }
         /* Note: Fetcher will only follow meta-redirects coming from the
          * original URL. */ 
@@ -519,10 +509,8 @@ public class Fetcher extends Configured {
             try {
               _scFilters.passScoreAfterParsing(url, content, parse);
             } catch (Exception e) {
-              if (LOG.isWarnEnabled()) {
-                e.printStackTrace(LogUtil.getWarnStream(LOG));
-                LOG.warn("Couldn't pass score, url " + key + " (" + e + ")");
-              }
+              LOG.warn("Couldn't pass score, url " + key +
+                       " (" + StringUtils.stringifyException(e) + ")");
             }
             _output.collect(url, new NutchWritable(
                               new ParseImpl(new ParseText(parse.getText()), 
@@ -530,10 +518,7 @@ public class Fetcher extends Configured {
           }
         }
       } catch (IOException e) {
-        if (LOG.isFatalEnabled()) {
-          e.printStackTrace(LogUtil.getFatalStream(LOG));
-          LOG.fatal("fetcher caught:"+e.toString());
-        }
+        LOG.fatal("fetcher caught:"+ StringUtils.stringifyException(e));
       }
 
       // return parse status if it exits
@@ -634,10 +619,8 @@ public class Fetcher extends Configured {
   public void fetch(Path segment)
     throws IOException {
 
-    if (LOG.isInfoEnabled()) {
-      LOG.info("Fetcher: starting");
-      LOG.info("Fetcher: segment: " + segment);
-    }
+    LOG.info("Fetcher: starting");
+    LOG.info("Fetcher: segment: " + segment);
 
     JobConf job = new NutchJob(getConf());
     job.setJobName("fetch " + segment);
@@ -657,7 +640,7 @@ public class Fetcher extends Configured {
     job.setOutputValueClass(NutchWritable.class);
 
     JobClient.runJob(job);
-    if (LOG.isInfoEnabled()) { LOG.info("Fetcher: done"); }
+    LOG.info("Fetcher: done");
   }
 
 
