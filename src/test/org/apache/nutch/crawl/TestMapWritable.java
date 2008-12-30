@@ -117,6 +117,7 @@ public class TestMapWritable extends TestCase {
     for (int i = 0; i < 1000000; i++) {
       key.set(i);
       mapValue.set(i);
+      map.clear();
       map.put(key, mapValue);
       writer.append(key, map);
     }
