@@ -482,40 +482,7 @@ public class Fetcher extends Configured {
         if (content != null && _isStoringContent)
           _output.collect(key, new NutchWritable(content));
         if (parseResult != null) {
-          for (Entry<Text, Parse> entry : parseResult) {
-            Text url = entry.getKey();
-            Parse parse = entry.getValue();
-            ParseStatus parseStatus = parse.getData().getStatus();
-            
-            if (!parseStatus.isSuccess()) {
-              LOG.warn("Error parsing: " + key + ": " + parseStatus);
-              parse = parseStatus.getEmptyParse(getConf());
-            }
-
-            // Calculate page signature. For non-parsing fetchers this will
-            // be done in ParseSegment
-            byte[] signature = 
-              SignatureFactory.getSignature(getConf()).calculate(content, parse);
-            // Ensure segment name and score are in parseData metadata
-            parse.getData().getContentMeta().set(Nutch.SEGMENT_NAME_KEY, 
-                                                 _segmentName);
-            parse.getData().getContentMeta().set(Nutch.SIGNATURE_KEY, 
-                                                 StringUtil.toHexString(signature));
-            // Pass fetch time to content meta
-            parse.getData().getContentMeta().set(Nutch.FETCH_TIME_KEY,
-                                                 Long.toString(datum.getFetchTime()));
-            if (url.equals(key))
-              datum.setSignature(signature);
-            try {
-              _scFilters.passScoreAfterParsing(url, content, parse);
-            } catch (Exception e) {
-              LOG.warn("Couldn't pass score, url " + key +
-                       " (" + StringUtils.stringifyException(e) + ")");
-            }
-            _output.collect(url, new NutchWritable(
-                              new ParseImpl(new ParseText(parse.getText()), 
-                                            parse.getData(), parse.isCanonical())));
-          }
+          collectParseResult(key, datum, content, parseResult);
         }
       } catch (IOException e) {
         LOG.fatal("fetcher caught:"+ StringUtils.stringifyException(e));
@@ -529,6 +496,46 @@ public class Fetcher extends Configured {
         }
       }
       return null;
+    }
+
+    private void collectParseResult(Text key, CrawlDatum datum,
+                                    Content content, ParseResult parseResult)
+      throws IOException
+    {
+      for (Entry<Text, Parse> entry : parseResult) {
+        Text url = entry.getKey();
+        Parse parse = entry.getValue();
+        ParseStatus parseStatus = parse.getData().getStatus();
+            
+        if (!parseStatus.isSuccess()) {
+          LOG.warn("Error parsing: " + key + ": " + parseStatus);
+          parse = parseStatus.getEmptyParse(getConf());
+        }
+
+        // Calculate page signature. For non-parsing fetchers this will
+        // be done in ParseSegment
+        byte[] signature = 
+          SignatureFactory.getSignature(getConf()).calculate(content, parse);
+        // Ensure segment name and score are in parseData metadata
+        parse.getData().getContentMeta().set(Nutch.SEGMENT_NAME_KEY, 
+                                             _segmentName);
+        parse.getData().getContentMeta().set(Nutch.SIGNATURE_KEY, 
+                                             StringUtil.toHexString(signature));
+        // Pass fetch time to content meta
+        parse.getData().getContentMeta().set(Nutch.FETCH_TIME_KEY,
+                                             Long.toString(datum.getFetchTime()));
+        if (url.equals(key))
+          datum.setSignature(signature);
+        try {
+          _scFilters.passScoreAfterParsing(url, content, parse);
+        } catch (Exception e) {
+          LOG.warn("Couldn't pass score, url " + key +
+                   " (" + StringUtils.stringifyException(e) + ")");
+        }
+        _output.collect(url, new NutchWritable(
+                          new ParseImpl(new ParseText(parse.getText()), 
+                                        parse.getData(), parse.isCanonical())));
+      }
     }
 
     private void updateStatus(int bytesInPage) throws IOException {
