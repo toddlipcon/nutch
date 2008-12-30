@@ -145,6 +145,25 @@ public class FetchQueue {
     }
   }
 
+  /**
+   * Return the total number of items enqueued
+   */
+  public int getTotalQueueLength() {
+    int count = 0;
+    for (RunQueue queue : _subqueues.values())
+      count += queue._queueLen;
+    return count;
+  }
+
+  /**
+   * Return the number of tasks running
+   */
+  public int getRunningCount() {
+    int count = 0;
+    for (RunQueue queue : _subqueues.values())
+      count += queue._tasksRunning;
+    return count;
+  }
 
   /**
    * Timer used by RunQueue below, but inner classes can't have

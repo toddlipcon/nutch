@@ -80,6 +80,8 @@ public class Fetcher extends Configured {
     private ParseUtil _parseUtil;
     private ScoringFilters _scFilters;
 
+    private long _lastReportTime = 0;
+
     public static enum Counters {
       QUEUES_FULL_WAIT
     };
@@ -170,6 +172,8 @@ public class Fetcher extends Configured {
         FetchItem fi = new FetchItem(new Text(key), (CrawlDatum)val.clone());
         submitFetchItem(fi);
 
+        reportStatus();
+
         // while there are more than _threadCount queues that have at least 2
         // items queued up, sleep for a little bit.
         while (_fetchQueue.countFullQueues(2) > _threadCount) {
@@ -197,7 +201,7 @@ public class Fetcher extends Configured {
       _fetchQueue.awaitCompletion(
         new Runnable() {
           public void run() {
-            _reporter.progress();
+            reportStatus();
           }
         });
       LOG.info("Fetcher shutting down executor completion");
@@ -209,6 +213,22 @@ public class Fetcher extends Configured {
       LOG.info("fetch of " + url + " failed with: " + message);
       // TODO: add back error counter
       //      _errors.incrementAndGet();
+    }
+
+    /**
+     * Set our status back to the job tracker
+     */
+    private void reportStatus() {
+      long now = System.currentTimeMillis();
+      if (now - _lastReportTime < 1000)
+        return;
+      _lastReportTime = now;
+
+      _reporter.progress();
+      String status =
+        "Remaining: " + _fetchQueue.getTotalQueueLength() + 
+        " Running: " + _fetchQueue.getRunningCount();
+      _reporter.setStatus(status);
     }
 
     /**
