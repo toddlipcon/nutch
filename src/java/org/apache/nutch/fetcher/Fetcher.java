@@ -58,221 +58,13 @@ public class Fetcher extends Configured {
 
 
   /**
-   * A Runnable that fetches a single FetchItem.
-   */
-  private static class FetchRunnable implements Runnable {
-    private final FetchItem fit;
-    private final FetchMapper _mapper;
-
-    private final int _maxRedirects;
-    private final int _maxCrawlDelay;
-
-    public FetchRunnable(FetchItem fit, FetchMapper mapper) {
-      this.fit = fit;
-      _mapper = mapper;
-      _maxRedirects = mapper.getMaxRedirects();
-      _maxCrawlDelay = _mapper.getMaxCrawlDelay();
-    }
-
-    private ProtocolOutput fetchProtocolOutput() throws ProtocolNotFound {
-      Protocol protocol = _mapper._protocolFactory.getProtocol(fit.url.toString());
-      RobotRules rules = protocol.getRobotRules(fit.url, fit.datum);
-
-      LOG.info("Robot rules: " + String.valueOf(rules));
-
-      // Check that we aren't denied by robot rules
-      if (!rules.isAllowed(fit.getJavaUrl())) {
-        LOG.debug("Denied by robots.txt: " + fit.url);
-        _mapper.output(fit.url, fit.datum, null, ProtocolStatus.STATUS_ROBOTS_DENIED, CrawlDatum.STATUS_FETCH_GONE);
-        return null;
-      }
-
-      // Update crawl delay based on robot rules
-      if (rules.getCrawlDelay() > _maxCrawlDelay) {
-        LOG.debug("Crawl-Delay for " + fit.url + " too long (" + rules.getCrawlDelay() + "), skipping");
-        _mapper.output(fit.url, fit.datum, null, ProtocolStatus.STATUS_ROBOTS_DENIED, CrawlDatum.STATUS_FETCH_GONE);
-        return null;
-      }
-
-      if (rules.getCrawlDelay() > 0) {
-        _mapper.setCrawlDelay(fit, rules.getCrawlDelay());
-      }
-
-      return protocol.getProtocolOutput(fit.url, fit.datum);
-
-    }
-
-    private FetchItem getRedirectedFetchItem(
-      FetchItem origFit,
-      String newUrl,
-      boolean temporaryRedirect)
-      throws MalformedURLException, URLFilterException
-    {
-      newUrl = _mapper.filterAndNormalize(newUrl);
-
-      // Redirect was filtered or was a self-redirect
-      if (newUrl == null || newUrl.equals(origFit.getUrlString())) {
-        LOG.debug(" - redirect skipped: " +
-                  (newUrl != null ? "to same url" : "filtered"));
-        return null;
-      }
-
-      CrawlDatum newDatum = new CrawlDatum(
-        CrawlDatum.STATUS_DB_UNFETCHED,
-        fit.datum.getFetchInterval(), fit.datum.getScore());
-
-      // The "representative URL" based on whether this redirect
-      // is temporary.
-      //
-      // We start with either the original URL or the URL that it is
-      // representive of (stored from previous redirect)
-      //
-      // This allows the representative URL to chain through a sequence
-      // of rediects.
-      String reprUrl = getReprUrl(origFit.getUrl(), origFit.getDatum());
-
-      // Use the Yahoo Slurp algorithm to decide which URL is the true URL
-      // of the page.
-      reprUrl = URLUtil.chooseRepr(reprUrl, newUrl, temporaryRedirect);
-
-      // If we have this, add it to the new metadata
-      if (reprUrl != null) {
-        newDatum.getMetaData().put(Nutch.WRITABLE_REPR_URL_KEY,
-                                   new Text(reprUrl));
-      }
-
-      return new FetchItem(new Text(newUrl), newDatum, origFit.getRedirectDepth() + 1);
-    }
-
-    private void handleRedirect(FetchItem origFit, String newUrl, boolean temporary)
-      throws MalformedURLException, URLFilterException
-    {
-      FetchItem redirFit = getRedirectedFetchItem(origFit, newUrl, temporary);
-      if (redirFit == null) {
-        // bad redirect (filtered or circular)
-        return;
-      }
-
-      if (_maxRedirects > 0 &&
-          redirFit.getRedirectDepth() <= _maxRedirects) {
-        // We have redirecting enabled, so add it to the queue
-        _mapper.submitFetchItem(redirFit);
-      } else if (_maxRedirects > 0) {
-        LOG.info(" - redirect count exceeded " + fit.url);
-        _mapper.output(origFit.url, origFit.datum, null,
-               ProtocolStatus.STATUS_REDIR_EXCEEDED, CrawlDatum.STATUS_FETCH_GONE);
-      }
-
-
-    }
-
-    public void run() {
-      try {
-        LOG.info("fetching " + fit.url);
-        LOG.debug("redirectCount=" + fit.getRedirectDepth());
-
-        // Actually fetch the item
-        ProtocolOutput output = fetchProtocolOutput();
-
-        // No output is possible if the host is down, denied by robots, etc
-        if (output == null)
-          return;
-
-        ProtocolStatus status = output.getStatus();
-        Content content = output.getContent();
-
-        switch(status.getCode()) {                
-          case ProtocolStatus.WOULDBLOCK:
-            _mapper.submitFetchItem(fit); // retry
-            return;
-
-          case ProtocolStatus.SUCCESS:        // got a page
-            ParseStatus parseStatus =
-              _mapper.output(fit.url, fit.datum, content, status, CrawlDatum.STATUS_FETCH_SUCCESS);
-            _mapper.updateStatus(content.getContent().length);
-
-            // Check for a redirect in the actual parsed content
-            if (parseStatus != null && parseStatus.isSuccess() &&
-                parseStatus.getMinorCode() == ParseStatus.SUCCESS_REDIRECT) {
-
-              int refreshTime = Integer.valueOf(parseStatus.getArgs()[1]);
-              boolean temporary = refreshTime < Fetcher.PERM_REFRESH_TIME;
-
-              handleRedirect(fit, parseStatus.getMessage(), temporary);
-            }
-            break;
-
-          case ProtocolStatus.MOVED:         // redirect by protocol
-          case ProtocolStatus.TEMP_MOVED:
-            int code;
-            boolean temporary;
-            if (status.getCode() == ProtocolStatus.MOVED) {
-              code = CrawlDatum.STATUS_FETCH_REDIR_PERM;
-              temporary = false;
-            } else {
-              code = CrawlDatum.STATUS_FETCH_REDIR_TEMP;
-              temporary = true;
-            }
-            _mapper.output(fit.url, fit.datum, content, status, code);
-            handleRedirect(fit, status.getMessage(), temporary);
-            break;
-
-          case ProtocolStatus.EXCEPTION:
-            _mapper.logError(fit.url, status.getMessage());
-            /* FALLTHROUGH */
-          case ProtocolStatus.RETRY:          // retry
-          case ProtocolStatus.BLOCKED:
-            _mapper.output(fit.url, fit.datum, null, status, CrawlDatum.STATUS_FETCH_RETRY);
-            break;
-                
-          case ProtocolStatus.GONE:           // gone
-          case ProtocolStatus.NOTFOUND:
-          case ProtocolStatus.ACCESS_DENIED:
-          case ProtocolStatus.ROBOTS_DENIED:
-            _mapper.output(fit.url, fit.datum, null, status, CrawlDatum.STATUS_FETCH_GONE);
-            break;
-
-          case ProtocolStatus.NOTMODIFIED:
-            _mapper.output(fit.url, fit.datum, null, status, CrawlDatum.STATUS_FETCH_NOTMODIFIED);
-            break;
-
-          default:
-            LOG.warn("Unknown ProtocolStatus: " + status.getCode());
-            _mapper.output(fit.url, fit.datum, null, status, CrawlDatum.STATUS_FETCH_RETRY);
-        }
-      } catch (Throwable t) {
-        _mapper.logError(fit.url, StringUtils.stringifyException(t));
-        _mapper.output(fit.url, fit.datum, null, ProtocolStatus.STATUS_FAILED, CrawlDatum.STATUS_FETCH_RETRY);
-      }
-    }
-
-    /**
-     * Given the key and value for a Mapper input, determine
-     * the actual URL we want to fetch.
-     *
-     * @return url
-     */
-    private String getReprUrl(Text key, CrawlDatum datum) {
-      Text reprUrlWritable =
-        (Text) datum.getMetaData().get(Nutch.WRITABLE_REPR_URL_KEY);
-      if (reprUrlWritable == null) {
-        return key.toString();
-      } else {
-        return reprUrlWritable.toString();
-      }
-    }
-
-  }
-
-  /**
    * The Mapper that runs over a single part file inside a segment, fetching
    * each of the CrawlDatums and outputting CrawlDatums for the fetched responses.
    */
   private static class FetchMapper extends Configured
-    implements MapRunnable<Text, CrawlDatum, Text, NutchWritable>
+    implements MapRunnable<Text, CrawlDatum, Text, NutchWritable>,
+    FetchSink
   {
-    private int _maxRedirects;
-    private int _maxCrawlDelay;
     private int _threadCount;
     private boolean _isParsing;
     private boolean _isStoringContent;
@@ -286,9 +78,6 @@ public class Fetcher extends Configured {
 
     private ParseUtil _parseUtil;
     private ScoringFilters _scFilters;
-    private URLFilters _urlFilters;
-    private URLNormalizers _normalizers;
-    private ProtocolFactory _protocolFactory;
 
     public static enum Counters {
       QUEUES_FULL_WAIT
@@ -297,14 +86,9 @@ public class Fetcher extends Configured {
     public void configure(JobConf conf) {
       setConf(conf);
 
-      _protocolFactory = new ProtocolFactory(conf);
-      _normalizers = new URLNormalizers(conf, URLNormalizers.SCOPE_FETCHER);
-      _urlFilters = new URLFilters(conf);
       _scFilters = new ScoringFilters(conf);
       _parseUtil = new ParseUtil(conf);
 
-      _maxRedirects = conf.getInt("http.redirect.max", 3);
-      _maxCrawlDelay = conf.getInt("fetcher.max.crawl.delay", 30) * 1000;
       _isParsing = FetcherConf.isParsing(conf);
       _isStoringContent = FetcherConf.isStoringContent(conf);
 
@@ -335,18 +119,6 @@ public class Fetcher extends Configured {
     }
 
     /**
-     * Filter and normalize the given url.
-     *
-     * @return the normalized URL, or null if it should be filtered.
-     */
-    private String filterAndNormalize(String url) 
-      throws MalformedURLException, URLFilterException
-    {
-      String newUrl = _normalizers.normalize(url, URLNormalizers.SCOPE_FETCHER);
-      return _urlFilters.filter(newUrl);
-    }
-
-    /**
      * Start the ExecutorService on which the actual fetch jobs will run.
      */
     private ExecutorService startExecutor() {
@@ -356,13 +128,13 @@ public class Fetcher extends Configured {
     /**
      * Submit a FetchItem to its appropriate queue.
      */
-    void submitFetchItem(FetchItem fi) {
+    public void submitFetchItem(FetchItem fi) {
       String qid = _queuePartitioner.getQueueId(fi);
       if (qid == null)
         return;
 
       _fetchQueue.submit(qid,
-                         new FetchRunnable(fi, this));
+                         new FetchRunnable(fi, getConf(), this));
     }
 
     /**
@@ -370,7 +142,7 @@ public class Fetcher extends Configured {
      *
      * @param delay the crawl delay in milliseconds
      */
-    void setCrawlDelay(FetchItem fi, long delay) {
+    public void setCrawlDelay(FetchItem fi, long delay) {
       String qid = _queuePartitioner.getQueueId(fi);
       if (qid == null)
         return;
@@ -424,7 +196,7 @@ public class Fetcher extends Configured {
       _executor.shutdown();
     }
 
-    private void logError(Text url, String message) {
+    public void logError(Text url, String message) {
       LOG.info("fetch of " + url + " failed with: " + message);
       // TODO: add back error counter
       //      _errors.incrementAndGet();
@@ -434,8 +206,8 @@ public class Fetcher extends Configured {
      * Output the fetched content for this CrawlDatum. If we have content fetched,
      * and we are running in parsing mode, the content parsed and the parse status is returned.
      */
-    private ParseStatus output(Text key, CrawlDatum datum,
-                               Content content, ProtocolStatus pstatus, int status) {
+    public ParseStatus output(Text key, CrawlDatum datum,
+                              Content content, ProtocolStatus pstatus, int status) {
 
       datum.setStatus(status);
       datum.setFetchTime(System.currentTimeMillis());
@@ -538,20 +310,11 @@ public class Fetcher extends Configured {
       }
     }
 
-    private void updateStatus(int bytesInPage) throws IOException {
+    public void updateStatus(int bytesInPage) throws IOException {
       // TODO: add back in status
       //pages.incrementAndGet();
       //bytes.addAndGet(bytesInPage);
     } 
-
-
-    public int getMaxCrawlDelay() {
-      return _maxCrawlDelay;
-    }
-
-    public int getMaxRedirects() {
-      return _maxRedirects;
-    }
   }
 
   /**

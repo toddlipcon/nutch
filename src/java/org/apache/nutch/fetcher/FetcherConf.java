@@ -42,6 +42,14 @@ public abstract class FetcherConf {
     return conf.getInt(THREADS_KEY, 10);
   }
 
+  public static int getMaxCrawlDelay(Configuration conf) {
+    return conf.getInt("fetcher.max.crawl.delay", 30) * 1000;
+  }
+
+  public static int getMaxRedirects(Configuration conf) {
+    return conf.getInt("http.redirect.max", 3);
+  }
+
   public static void setThreads(Configuration conf, int threads) {
     conf.setInt(THREADS_KEY, threads);
   }
