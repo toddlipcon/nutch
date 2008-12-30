@@ -194,7 +194,12 @@ public class Fetcher extends Configured {
       LOG.info("Fetcher shutting down fetch queue");
       _fetchQueue.shutdown();
       LOG.info("Fetcher awaiting fetch queue completion");
-      _fetchQueue.awaitCompletion();
+      _fetchQueue.awaitCompletion(
+        new Runnable() {
+          public void run() {
+            _reporter.progress();
+          }
+        });
       LOG.info("Fetcher shutting down executor completion");
       _executor.shutdown();
     }

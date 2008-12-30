@@ -108,11 +108,11 @@ public class FetchQueue {
    * to block against it. If this returns but you didn't call shutdown
    * first, there's no guarantee that all queues are empty.
    */
-  public void awaitCompletion() {
+  public void awaitCompletion(Runnable idler) {
     // Wait for completion
     boolean done = false;
     while (!done) {
-      try { Thread.sleep(500); } catch (InterruptedException ie) {}
+      try { Thread.sleep(500); idler.run(); } catch (InterruptedException ie) {}
 
       done = true;
       for (RunQueue q : _subqueues.values()) {
@@ -300,7 +300,11 @@ public class FetchQueue {
     q.submit("b", new TestPrinter("     b/c"));
 
     q.shutdown();
-    q.awaitCompletion();
+    q.awaitCompletion(new Runnable() {
+        public void run() {
+          System.err.println("Awaiting completion...");
+        }
+      });
     pool.shutdown();
   }
 
