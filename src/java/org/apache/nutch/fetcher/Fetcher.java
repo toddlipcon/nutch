@@ -75,6 +75,7 @@ public class Fetcher extends Configured {
     private QueuePartitioner _queuePartitioner;
 
     private OutputCollector<Text, NutchWritable> _output;
+    private Reporter _reporter;
 
     private ParseUtil _parseUtil;
     private ScoringFilters _scFilters;
@@ -161,6 +162,7 @@ public class Fetcher extends Configured {
       CrawlDatum val = new CrawlDatum();
 
       _output = output;
+      _reporter = reporter;
 
       while (input.next(key, val)) {        
         // The cloning below is very important - otherwise it will be modified
@@ -172,6 +174,7 @@ public class Fetcher extends Configured {
         // items queued up, sleep for a little bit.
         while (_fetchQueue.countFullQueues(2) > _threadCount) {
           reporter.incrCounter(Counters.QUEUES_FULL_WAIT, 1);
+          reporter.progress();
           try {
             Thread.sleep(500);
           } catch (InterruptedException ie) {
@@ -197,6 +200,7 @@ public class Fetcher extends Configured {
     }
 
     public void logError(Text url, String message) {
+      _reporter.progress();
       LOG.info("fetch of " + url + " failed with: " + message);
       // TODO: add back error counter
       //      _errors.incrementAndGet();
@@ -209,6 +213,7 @@ public class Fetcher extends Configured {
     public ParseStatus output(Text key, CrawlDatum datum,
                               Content content, ProtocolStatus pstatus, int status) {
 
+      _reporter.progress();
       datum.setStatus(status);
       datum.setFetchTime(System.currentTimeMillis());
       if (pstatus != null) datum.getMetaData().put(Nutch.WRITABLE_PROTO_STATUS_KEY, pstatus);
