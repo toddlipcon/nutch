@@ -167,12 +167,16 @@ public class Fetcher extends Configured {
       _reporter = reporter;
 
       while (input.next(key, val)) {        
-        // The cloning below is very important - otherwise it will be modified
-        // underneath the FetchItem.
-        FetchItem fi = new FetchItem(new Text(key), (CrawlDatum)val.clone());
+        FetchItem fi = new FetchItem(new Text(key), val);
         submitFetchItem(fi);
 
         reportStatus();
+
+        /**
+         * As nice as it is to be able to re-use a crawldatum, we can't since we passed
+         * off this one to be fetched, and CrawlDatums are mutable :(
+         */
+        val = new CrawlDatum();
 
         // while there are more than _threadCount queues that have at least 2
         // items queued up, sleep for a little bit.
