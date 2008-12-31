@@ -23,8 +23,12 @@ import org.apache.hadoop.conf.*;
  * Utilities for getting fetcher-related configuration variables
  */
 public abstract class FetcherConf {
-  private static final String PARSE_KEY="fetcher.parse";
-  private static final String THREADS_KEY="fetcher.threads.fetch";
+  static final String PARSE_KEY="fetcher.parse";
+  static final String THREADS_KEY="fetcher.threads.fetch";
+  static final String SERVER_DELAY_KEY="fetcher.server.delay";
+  static final String MAX_CRAWL_DELAY_KEY="fetcher.max.crawl.delay";
+  static final String THREADS_PER_HOST_KEY="fetcher.threads.per.host";
+  static final String MAX_REDIRECT_KEY="http.redirect.max";
 
   public static boolean isStoringContent(Configuration conf) {
     return conf.getBoolean("fetcher.store.content", true);
@@ -43,18 +47,18 @@ public abstract class FetcherConf {
   }
 
   public static long getCrawlDelayMs(Configuration conf) {
-    return (long) (conf.getFloat("fetcher.server.delay", 1.0f) * 1000);
+    return (long) (conf.getFloat(SERVER_DELAY_KEY, 1.0f) * 1000);
   }
   public static int getMaxCrawlDelay(Configuration conf) {
-    return conf.getInt("fetcher.max.crawl.delay", 30) * 1000;
+    return conf.getInt(MAX_CRAWL_DELAY_KEY, 30) * 1000;
   }
 
   public static int getThreadsPerHost(Configuration conf) {
-    return conf.getInt("fetcher.threads.per.host", 1);
+    return conf.getInt(THREADS_PER_HOST_KEY, 1);
   }
 
   public static int getMaxRedirects(Configuration conf) {
-    return conf.getInt("http.redirect.max", 3);
+    return conf.getInt(MAX_REDIRECT_KEY, 3);
   }
 
   public static void setThreads(Configuration conf, int threads) {

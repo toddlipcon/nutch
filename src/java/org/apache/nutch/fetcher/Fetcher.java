@@ -96,7 +96,7 @@ public class Fetcher extends Configured {
       _isStoringContent = FetcherConf.isStoringContent(conf);
 
       _segmentName = conf.get(Nutch.SEGMENT_NAME_KEY);
-      _threadCount = conf.getInt("fetcher.threads.fetch", 10);
+      _threadCount = FetcherConf.getThreads(conf);
 
       LOG.info("Fetcher: threads: " + _threadCount);
 

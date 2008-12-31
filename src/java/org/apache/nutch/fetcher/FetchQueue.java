@@ -350,8 +350,8 @@ public class FetchQueue {
     ExecutorService pool = Executors.newFixedThreadPool(4);
 
     Configuration conf = new Configuration();
-    conf.setInt("fetcher.threads.per.host", 2);
-    conf.set("fetcher.server.delay", "1.0");
+    conf.setInt(FetcherConf.THREADS_PER_HOST_KEY, 2);
+    conf.set(FetcherConf.SERVER_DELAY_KEY, "1.0");
     FetchQueue q = new FetchQueue(pool, conf);
     
     q.submit("a", new TestPrinter("a/a"));
