@@ -65,9 +65,12 @@ public class FetchQueue {
    */
   private final long _initialCrawlDelay;
 
+  private Configuration _conf;
+
   public FetchQueue(ExecutorService pool,
                     Configuration conf) {
     _pool = pool;
+    _conf = conf;
 
     _maxTasksPerHost = FetcherConf.getThreadsPerHost(conf);
     _initialCrawlDelay = FetcherConf.getCrawlDelayMs(conf);
@@ -179,14 +182,24 @@ public class FetchQueue {
    */
   class RunQueue {
     private int _tasksRunning;
-    private long _crawlDelay;
+
+    /**
+     * The time to wait in between requests in milliseconds
+     */
+    private long _crawlDelayMs;
     
     /**
      * Maintains a trailing average of how long requests are taking in this queue.
-     * We start it at a conservative level and assume it'll quickly approach
-     * the true rate.
+     * This is incrementally updated after each fetch using an exponential approach.
      */
-    private double _trailingTimeAverage = 3;
+    private double _trailingTimeAverage;
+
+    /**
+     * True if adaptive crawl delay is enabled for this queue. If the robots.txt causes
+     * setCrawlDelay to be called, this is forced false so that adaptive delay is disabled
+     * for this queue only.
+     */
+    private boolean _adaptiveDelayEnabled;
 
 
     /**
@@ -217,7 +230,9 @@ public class FetchQueue {
       _tasksRunning = 0;
       _itemQueue = new LinkedList<Runnable>();
       _runPool = runPool;
-      _crawlDelay = _initialCrawlDelay;
+      _crawlDelayMs = _initialCrawlDelay;
+      _trailingTimeAverage = _crawlDelayMs / 1000.0;
+      _adaptiveDelayEnabled = FetcherConf.isAdaptiveCrawlDelayEnabled(_conf);
     }
 
     public synchronized boolean isEmpty() {
@@ -231,9 +246,14 @@ public class FetchQueue {
       return _tasksRunning == _maxTasksPerHost && _itemQueue.size() >= queuelen;
     }
 
+    /**
+     * Forces the crawl delay for this queue to the given number of milliseconds between
+     * requests. This also disables adaptive crawl delay.
+     */
     public void setCrawlDelay(long delayMs) {
       assert(delayMs >= 0);
-      _crawlDelay = delayMs;
+      _crawlDelayMs = delayMs;
+      _adaptiveDelayEnabled = false;
     }
 
     /**
@@ -300,9 +320,25 @@ public class FetchQueue {
       }
     }
 
+    /**
+     * Return the current crawl delay in milliseconds.
+     */
+    private long calculateCrawlDelay() {
+      long delay;
+      if (_adaptiveDelayEnabled)
+        delay = (long)(_trailingTimeAverage * FetcherConf.getAdaptiveCrawlDelayRatio(_conf) * 1000);
+      else
+        delay = _crawlDelayMs;
+
+      if (delay < FetcherConf.getMinCrawlDelay(_conf))
+        delay = FetcherConf.getMinCrawlDelay(_conf);
+
+      return delay;
+    }
+
     private synchronized void scheduleTask() {
       _tickTimer.schedule(new TimerTask() { public void run() { taskTick(); } },
-                          _crawlDelay);
+                          calculateCrawlDelay());
     }
 
 

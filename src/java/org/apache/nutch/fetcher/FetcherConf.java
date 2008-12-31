@@ -26,9 +26,12 @@ public abstract class FetcherConf {
   static final String PARSE_KEY="fetcher.parse";
   static final String THREADS_KEY="fetcher.threads.fetch";
   static final String SERVER_DELAY_KEY="fetcher.server.delay";
+  static final String MIN_CRAWL_DELAY_KEY="fetcher.min.crawl.delay";
   static final String MAX_CRAWL_DELAY_KEY="fetcher.max.crawl.delay";
   static final String THREADS_PER_HOST_KEY="fetcher.threads.per.host";
   static final String MAX_REDIRECT_KEY="http.redirect.max";
+  static final String ADAPTIVE_DELAY_KEY="fetcher.adaptive.crawl.delay.enabled";
+  static final String ADAPTIVE_DELAY_RATIO_KEY="fetcher.adaptive.crawl.delay.ratio";
 
   public static boolean isStoringContent(Configuration conf) {
     return conf.getBoolean("fetcher.store.content", true);
@@ -49,6 +52,11 @@ public abstract class FetcherConf {
   public static long getCrawlDelayMs(Configuration conf) {
     return (long) (conf.getFloat(SERVER_DELAY_KEY, 1.0f) * 1000);
   }
+
+  public static int getMinCrawlDelay(Configuration conf) {
+    return conf.getFloat(MIN_CRAWL_DELAY_KEY, 0.3f) * 1000;
+  }
+
   public static int getMaxCrawlDelay(Configuration conf) {
     return conf.getInt(MAX_CRAWL_DELAY_KEY, 30) * 1000;
   }
@@ -59,6 +67,14 @@ public abstract class FetcherConf {
 
   public static int getMaxRedirects(Configuration conf) {
     return conf.getInt(MAX_REDIRECT_KEY, 3);
+  }
+
+  public static boolean isAdaptiveCrawlDelayEnabled(Configuration conf) {
+    return conf.getBoolean(ADAPTIVE_DELAY_KEY, false);
+  }
+
+  public static float getAdaptiveCrawlDelayRatio(Configuration conf) {
+    return conf.getFloat(ADAPTIVE_DELAY_RATIO_KEY, 5.0f);
   }
 
   public static void setThreads(Configuration conf, int threads) {

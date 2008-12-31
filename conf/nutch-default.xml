@@ -538,12 +538,13 @@
 </property>
 
 <property>
-  <name>fetcher.server.min.delay</name>
-  <value>0.0</value>
+  <name>fetcher.min.crawl.delay</name>
+  <value>0.25</value>
   <description>The minimum number of seconds the fetcher will delay between 
-  successive requests to the same server. This value is applicable ONLY
-  if fetcher.threads.per.host is greater than 1 (i.e. the host blocking
-  is turned off).</description>
+  successive requests to the same server. This value applies when adaptive crawl
+  delay is enabled and prevents a really fast server from causing crawl delay to
+  fall too low.
+  </description>
 </property>
 
 <property>
@@ -557,6 +558,25 @@
  might be.
  </description>
 </property> 
+
+<property>
+  <name>fetcher.adaptive.crawl.delay.enabled</name>
+  <value>false</value>
+  <description>
+  Maintains a trailing average of how long requests take to service from each
+  host, and adaptively changes the crawl delay for that host based on its
+  response time. See also fetcher.adaptive.crawl.ratio
+  </description>
+</property>
+
+<property>
+  <name>fetcher.adaptive.crawl.delay.ratio</name>
+  <value>5.0</value>
+  <description>
+  If adaptive crawl delay is enabled, the average request time for a host will
+  be multiplied by this ratio to determine the crawl delay.
+  </description>
+</property>
 
 <property>
   <name>fetcher.threads.fetch</name>
