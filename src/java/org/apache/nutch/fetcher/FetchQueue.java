@@ -173,14 +173,20 @@ public class FetchQueue {
   /**
    * Return true if every queue is terminable.
    */
-  /**
-   * Return the number of tasks running
-   */
   public boolean isEveryQueueTerminable() {
     for (RunQueue queue : _subqueues.values())
       if (!queue.isTerminable())
         return false;
     return true;
+  }
+
+  /**
+   * Mark all of the queues as terminating so that they just go through their remaining
+   * items with no delay, outputting them to be re-fetched in a later segment.
+   */
+  public void terminateQueues() {
+    for (RunQueue queue : _subqueues.values())
+      queue.terminate();
   }
 
 
@@ -239,6 +245,12 @@ public class FetchQueue {
      * in LinkedList
      */
     private int _queueLen = 0;
+
+
+    /**
+     * Set to true when the fetcher is doing early termination.
+     */
+    private boolean _terminated = false;
     
     public RunQueue(Executor runPool) {
       _tasksRunning = 0;
@@ -271,6 +283,10 @@ public class FetchQueue {
 
       double reqTime = _trailingTimeAverage + (double)(calculateCrawlDelay() / 1000.0);
       return (reqTime > FetcherConf.getMinTerminableRequestTime(_conf));
+    }
+
+    public void terminate() {
+      _terminated = true;
     }
 
     /**
@@ -352,6 +368,7 @@ public class FetchQueue {
      */
     private long calculateCrawlDelay() {
       long delay;
+
       if (_adaptiveDelayEnabled)
         delay = (long)(_trailingTimeAverage * FetcherConf.getAdaptiveCrawlDelayRatio(_conf) * 1000);
       else
@@ -364,8 +381,15 @@ public class FetchQueue {
     }
 
     private synchronized void scheduleTask() {
-      _tickTimer.schedule(new TimerTask() { public void run() { taskTick(); } },
-                          calculateCrawlDelay());
+      // Once we're terminated, we just want to blast through the remaining
+      // items, since we're just marking them as retry, so politeness doesn't
+      // apply.
+      if (_terminated) {
+        taskTick();
+      } else {
+        _tickTimer.schedule(new TimerTask() { public void run() { taskTick(); } },
+                            calculateCrawlDelay());
+      }
     }
 
 

@@ -227,13 +227,14 @@ public class Fetcher extends Configured {
 
             // Check if all queues in the FetchQueue are terminable -
             // this happens when we're down to just a few straggler hosts
-            if (_fetchQueue.isEveryQueueTerminable()) {
+            if (!_isTerminating && _fetchQueue.isEveryQueueTerminable()) {
               LOG.info("Every queue is terminable. Marking termination mode.");
               // Flag ourself as in termination mode. The FetchRunnables
               // check this and if it's set, they don't actually fetch
               // the remaining urls. Instead they just output datums causing
               // the URLs to be re-entered into the crawldb.
               _isTerminating = true;
+              _fetchQueue.terminateQueues();
             }
           }
         });
