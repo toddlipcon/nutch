@@ -33,4 +33,5 @@ interface FetchSink {
   void submitFetchItem(FetchItem item);
   void setCrawlDelay(FetchItem fi, long delay);
   void recordFetchTime(FetchItem fi, long ms);
+  boolean isTerminating();
 }

@@ -171,6 +171,20 @@ public class FetchQueue {
   }
 
   /**
+   * Return true if every queue is terminable.
+   */
+  /**
+   * Return the number of tasks running
+   */
+  public boolean isEveryQueueTerminable() {
+    for (RunQueue queue : _subqueues.values())
+      if (!queue.isTerminable())
+        return false;
+    return true;
+  }
+
+
+  /**
    * Timer used by RunQueue below, but inner classes can't have
    * static members
    */
@@ -244,6 +258,19 @@ public class FetchQueue {
      */
     public synchronized boolean isFull(int queuelen) {
       return _tasksRunning == _maxTasksPerHost && _itemQueue.size() >= queuelen;
+    }
+
+
+    /**
+     * Return true if the request rate of this fetch queue is slower than the
+     * minimum request rate configured, or if this queue is empty.
+     */
+    public boolean isTerminable() {
+      if (isEmpty())
+        return true;
+
+      double reqTime = _trailingTimeAverage + (double)(calculateCrawlDelay() / 1000.0);
+      return (reqTime > FetcherConf.getMinTerminableRequestTime(_conf));
     }
 
     /**

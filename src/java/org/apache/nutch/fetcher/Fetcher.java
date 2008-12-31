@@ -82,6 +82,13 @@ public class Fetcher extends Configured {
 
     private long _lastReportTime = 0;
 
+    /**
+     * When this is set, fetchrunnables will not actually do any fetching, but will
+     * just output CrawlDatums back into the CrawlDB that cause the urls to end up
+     * in later fetch segments.
+     */
+    private boolean _isTerminating = false;
+
     public static enum Counters {
       QUEUES_FULL_WAIT
     };
@@ -212,12 +219,36 @@ public class Fetcher extends Configured {
       LOG.info("Fetcher awaiting fetch queue completion");
       _fetchQueue.awaitCompletion(
         new Runnable() {
+          /**
+           * This is run periodically while waiting for queues to empty.
+           */
           public void run() {
             reportStatus();
+
+            // Check if all queues in the FetchQueue are terminable -
+            // this happens when we're down to just a few straggler hosts
+            if (_fetchQueue.isEveryQueueTerminable()) {
+              LOG.info("Every queue is terminable. Marking termination mode.");
+              // Flag ourself as in termination mode. The FetchRunnables
+              // check this and if it's set, they don't actually fetch
+              // the remaining urls. Instead they just output datums causing
+              // the URLs to be re-entered into the crawldb.
+              _isTerminating = true;
+            }
           }
         });
       LOG.info("Fetcher shutting down executor completion");
       _executor.shutdown();
+    }
+
+    /**
+     * Return true if the fetcher wants all of the enqueued objects to skip actual
+     * fetching.
+     *
+     * @see _isTerminating
+     */
+    public boolean isTerminating() {
+      return _isTerminating;
     }
 
     public void logError(Text url, String message) {

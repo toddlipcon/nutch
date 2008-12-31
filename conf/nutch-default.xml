@@ -579,6 +579,26 @@
 </property>
 
 <property>
+  <name>fetcher.terminable.min.request.time</name>
+  <value>10.0</value>
+  <description>
+  If the amount of time between successive requests for a fetch queue grows above
+  this number of seconds, the queue is marked as terminable. This amount of time
+  is calculated as the number of seconds taken by the request plus the current crawl
+  delay of that queue. The purpose of this configuration paramter is to prevent
+  a couple of slow hosts (or hosts with high Crawl-delay set in robots.txt) from
+  dominating the time spent in a fetch.
+
+  Note that the queue is not terminated immediately upon crossing this threshold -
+  it is only terminated if all queues with work remaining are terminable. Otherwise
+  it will keep working.
+
+  Any items left in the queue will be retried in a later fetch.
+  </description>
+</property>
+  
+
+<property>
   <name>fetcher.threads.fetch</name>
   <value>10</value>
   <description>The number of FetcherThreads the fetcher should use.

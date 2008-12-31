@@ -152,6 +152,14 @@ public class FetchRunnable implements Runnable {
   }
 
   public void run() {
+
+    // If the sink is terminating, just output the datum back into the crawldb
+    if (_sink.isTerminating()) {
+      _sink.output(fit.url, fit.datum, null, null, CrawlDatum.STATUS_FETCH_TERMINATED);
+      LOG.info("fetcher terminating - skipping fetch of " + fit.url);
+      return;
+    }
+
     try {
       LOG.info("fetching " + fit.url);
       LOG.debug("redirectCount=" + fit.getRedirectDepth());

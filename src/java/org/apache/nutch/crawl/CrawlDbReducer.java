@@ -122,6 +122,15 @@ public class CrawlDbReducer implements Reducer<Text, CrawlDatum, Text, CrawlDatu
       return;
     }
     
+    // the fetch was terminated early, so we need to flag the url in the crawldb
+    // as if it was never generated
+    if (fetchSet && fetch.getStatus() == CrawlDatum.STATUS_FETCH_TERMINATED) {
+      result = oldSet ? old : fetch;
+      result.getMetaData().remove(Nutch.WRITABLE_GENERATE_TIME_KEY);
+      output.collect(key, result);
+      return;
+    }
+
     if (signature == null) signature = fetch.getSignature();
     long prevModifiedTime = oldSet ? old.getModifiedTime() : 0L;
     long prevFetchTime = oldSet ? old.getFetchTime() : 0L;

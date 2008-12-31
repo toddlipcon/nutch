@@ -71,6 +71,9 @@ public class CrawlDatum implements WritableComparable, Cloneable {
   public static final byte STATUS_FETCH_GONE        = 0x25;
   /** Fetching successful - page is not modified. */
   public static final byte STATUS_FETCH_NOTMODIFIED = 0x26;
+
+  /** Fetch was terminated early - page should be flagged for generation again. */
+  public static final byte STATUS_FETCH_TERMINATED  = 0x27;
   
   /** Maximum value of fetch-related status. */
   public static final byte STATUS_FETCH_MAX         = 0x3f;
