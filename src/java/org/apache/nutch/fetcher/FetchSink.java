@@ -32,4 +32,5 @@ interface FetchSink {
   void updateStatus(int bytesInPage) throws IOException;
   void submitFetchItem(FetchItem item);
   void setCrawlDelay(FetchItem fi, long delay);
+  void recordFetchTime(FetchItem fi, long ms);
 }

@@ -157,11 +157,17 @@ public class FetchRunnable implements Runnable {
       LOG.debug("redirectCount=" + fit.getRedirectDepth());
 
       // Actually fetch the item
+      long startTime = System.currentTimeMillis();
       ProtocolOutput output = fetchProtocolOutput();
 
       // No output is possible if the host is down, denied by robots, etc
       if (output == null)
         return;
+
+      // Report back to the sink how fast the fetch happened. It's important to do this
+      // after the above check since otherwise requests denied by cached robots.txt will cause the
+      // adaptive crawl delay to plummet to 0.
+      _sink.recordFetchTime(fit, System.currentTimeMillis() - startTime);
 
       ProtocolStatus status = output.getStatus();
       Content content = output.getContent();

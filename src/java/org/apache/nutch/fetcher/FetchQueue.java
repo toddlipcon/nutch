@@ -178,6 +178,27 @@ public class FetchQueue {
   class RunQueue {
     private int _tasksRunning;
     private long _crawlDelay;
+    
+    /**
+     * Maintains a trailing average of how long requests are taking in this queue.
+     * We start it at a conservative level and assume it'll quickly approach
+     * the true rate.
+     */
+    private double _trailingTimeAverage = 3;
+
+
+    /**
+     * When computing the trailing average, the weight with which to factor in the
+     * old measurement. A higher value here lends more stability to the value of
+     * _trailingTimeAverage but means that it will approach new values slowly.
+     *
+     * We use separate constants for when the new value is increasing or decreasing
+     * relative to the current average. To be polite we'd rather quickly slow down
+     * and then slowly creep back up to a faster request rate when we notice congestion
+     * on the server.
+     */
+    private static final double TRAIL_AVERAGE_WEIGHT_INCREASING = 0.4;
+    private static final double TRAIL_AVERAGE_WEIGHT_DECREASING = 0.6;
 
     private final Executor _runPool;
 
@@ -213,6 +234,24 @@ public class FetchQueue {
       _crawlDelay = delayMs;
     }
 
+    /**
+     * Record how long it took to fetch an item.
+     *
+     * This updates the internal statistics for this queue to determine
+     * whether:
+     *  (a) the queue is going slow enough that it is "terminable"
+     *  (b) the crawl delay (in the case that adaptive crawl delay is enabled)
+     */
+    public void recordFetchTime(long ms) {
+      double sec = (double)ms / 1000.0;
+
+      double weight = (sec > _trailingTimeAverage) ?
+        TRAIL_AVERAGE_WEIGHT_INCREASING :
+        TRAIL_AVERAGE_WEIGHT_DECREASING;
+
+      _trailingTimeAverage =
+        weight * _trailingTimeAverage + (1 - weight) * sec;
+    }
 
     /**
      * The flow choices here are:

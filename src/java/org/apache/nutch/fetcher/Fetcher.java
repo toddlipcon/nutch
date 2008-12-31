@@ -154,6 +154,17 @@ public class Fetcher extends Configured {
     }
 
     /**
+     * Update the statistics on how quickly a fetch item was fetched.
+     */
+    public void recordFetchTime(FetchItem fi, long ms) {
+      String qid = _queuePartitioner.getQueueId(fi);
+      if (qid == null)
+        return;
+
+      _fetchQueue.getQueue(qid).recordFetchTime(ms);
+    }
+
+    /**
      * Entry point for Mapper
      */
     public void run(RecordReader<Text, CrawlDatum> input,
