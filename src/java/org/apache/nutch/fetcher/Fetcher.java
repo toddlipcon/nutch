@@ -101,10 +101,7 @@ public class Fetcher extends Configured {
       LOG.info("Fetcher: threads: " + _threadCount);
 
       _executor = startExecutor();
-      _fetchQueue = new FetchQueue(
-        _executor,
-        conf.getInt("fetcher.threads.per.host", 1),
-        (long) (conf.getFloat("fetcher.server.delay", 1.0f) * 1000));
+      _fetchQueue = new FetchQueue(_executor, conf);
 
       _queuePartitioner = createQueuePartitioner(conf);
     }

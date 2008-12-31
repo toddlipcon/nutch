@@ -16,6 +16,7 @@
 
 package org.apache.nutch.fetcher;
 
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
+
 
 /**
  * A queue that jobs can be submitted to with a queue ID string.
@@ -64,11 +66,11 @@ public class FetchQueue {
   private final long _initialCrawlDelay;
 
   public FetchQueue(ExecutorService pool,
-                    int maxTasksPerHost,
-                    long crawlDelay) {
+                    Configuration conf) {
     _pool = pool;
-    _maxTasksPerHost = maxTasksPerHost;
-    _initialCrawlDelay = crawlDelay;
+
+    _maxTasksPerHost = FetcherConf.getThreadsPerHost(conf);
+    _initialCrawlDelay = FetcherConf.getCrawlDelayMs(conf);
   }
 
   /**
@@ -346,8 +348,11 @@ public class FetchQueue {
 
   public static void main(String args[]) {
     ExecutorService pool = Executors.newFixedThreadPool(4);
-    
-    FetchQueue q = new FetchQueue(pool, 2, 2000);
+
+    Configuration conf = new Configuration();
+    conf.setInt("fetcher.threads.per.host", 2);
+    conf.set("fetcher.server.delay", "1.0");
+    FetchQueue q = new FetchQueue(pool, conf);
     
     q.submit("a", new TestPrinter("a/a"));
     q.submit("a", new TestPrinter(" a/b"));
