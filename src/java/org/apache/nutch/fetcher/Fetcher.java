@@ -514,6 +514,10 @@ public class Fetcher extends Configured {
         FetcherConf.setParsing(conf, false);
     }
 
+    // We check robots and blocking ourself.
+    conf.setBoolean(Protocol.CHECK_BLOCKING, false);
+    conf.setBoolean(Protocol.CHECK_ROBOTS, false);
+
     Fetcher fetcher = new Fetcher(conf);          // make a Fetcher
     
     fetcher.fetch(segment);              // run the Fetcher
